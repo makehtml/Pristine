@@ -81,69 +81,59 @@ _("equals", {
   },
 });
 
-console.log(_);
+export default function Pristine(form, config = defaultConfig, live = true) {
+  form.setAttribute("novalidate", "true");
+  const options = mergeConfig(config || {}, defaultConfig);
+  let wasValidated = false;
 
-export default function Pristine(form, config, live) {
-  let self = this;
+  let fields = Array.from(form.querySelectorAll(SELECTOR)).map((input) => {
+    let fns = [];
+    let params = {};
+    let messages = {};
 
-  init(form, config, live);
+    Array.from(input.attributes).forEach((attr) => {
+      if (/^data-pristine-/.test(attr.name)) {
+        let name = attr.name.substr(14);
+        let messageMatch = name.match(MESSAGE_REGEX);
+        if (messageMatch !== null) {
+          let locale = messageMatch[1] === undefined ? "en" : messageMatch[1];
+          if (!messages.hasOwnProperty(locale)) messages[locale] = {};
+          messages[locale][
+            name.slice(0, name.length - messageMatch[0].length)
+          ] = attr.value;
+          return;
+        }
+        if (name === "type") name = attr.value;
+        _addValidatorToField(fns, params, name, attr.value);
+      } else if (~ALLOWED_ATTRIBUTES.indexOf(attr.name)) {
+        _addValidatorToField(fns, params, attr.name, attr.value);
+      } else if (attr.name === "type") {
+        _addValidatorToField(fns, params, attr.value);
+      }
+    });
 
-  function init(form, config, live) {
-    form.setAttribute("novalidate", "true");
+    fns.sort((a, b) => b.priority - a.priority);
 
-    self.form = form;
-    self.config = mergeConfig(config || {}, defaultConfig);
-    self.live = !(live === false);
-    self.fields = Array.from(form.querySelectorAll(SELECTOR)).map(
-      function (input) {
-        let fns = [];
-        let params = {};
-        let messages = {};
-
-        [].forEach.call(input.attributes, function (attr) {
-          if (/^data-pristine-/.test(attr.name)) {
-            let name = attr.name.substr(14);
-            let messageMatch = name.match(MESSAGE_REGEX);
-            if (messageMatch !== null) {
-              let locale =
-                messageMatch[1] === undefined ? "en" : messageMatch[1];
-              if (!messages.hasOwnProperty(locale)) messages[locale] = {};
-              messages[locale][
-                name.slice(0, name.length - messageMatch[0].length)
-              ] = attr.value;
-              return;
-            }
-            if (name === "type") name = attr.value;
-            _addValidatorToField(fns, params, name, attr.value);
-          } else if (~ALLOWED_ATTRIBUTES.indexOf(attr.name)) {
-            _addValidatorToField(fns, params, attr.name, attr.value);
-          } else if (attr.name === "type") {
-            _addValidatorToField(fns, params, attr.value);
+    live &&
+      input.addEventListener(
+        !~["radio", "checkbox"].indexOf(input.getAttribute("type"))
+          ? "input"
+          : "change",
+        (e) => {
+          if (wasValidated) {
+            validate(e.target);
           }
-        });
+        }
+      );
 
-        fns.sort((a, b) => b.priority - a.priority);
-
-        self.live &&
-          input.addEventListener(
-            !~["radio", "checkbox"].indexOf(input.getAttribute("type"))
-              ? "input"
-              : "change",
-            function (e) {
-              self.validate(e.target);
-            }.bind(self)
-          );
-
-        return (input.pristine = {
-          input,
-          validators: fns,
-          params,
-          messages,
-          self,
-        });
-      }.bind(self)
-    );
-  }
+    return (input.pristine = {
+      input,
+      validators: fns,
+      params,
+      form,
+      messages,
+    });
+  });
 
   function _addValidatorToField(fns, params, name, value) {
     let validator = validators[name];
@@ -163,45 +153,47 @@ export default function Pristine(form, config, live) {
    * @param silent => do not show error messages, just return true/false
    * @returns {boolean} return true when valid false otherwise
    */
-  self.validate = function (input, silent) {
-    silent = (input && silent === true) || input === true;
-    let fields = self.fields;
-    if (input !== true && input !== false) {
+  function validate(input = null, silent = false) {
+    let fieldsToValidate = fields;
+
+    if (input) {
       if (input instanceof HTMLElement) {
-        fields = [input.pristine];
+        fieldsToValidate = [input.pristine];
       } else if (
         input instanceof NodeList ||
         input instanceof (window.$ || Array) ||
         input instanceof Array
       ) {
-        fields = Array.from(input).map((el) => el.pristine);
+        fieldsToValidate = Array.from(input).map((el) => el.pristine);
       }
+    } else {
+      wasValidated = true;
     }
 
     let valid = true;
 
-    for (let i = 0; fields[i]; i++) {
-      let field = fields[i];
+    fieldsToValidate.forEach((field) => {
       if (_validateField(field)) {
         !silent && _showSuccess(field);
       } else {
         valid = false;
         !silent && _showError(field);
       }
-    }
+    });
+
     return valid;
-  };
+  }
 
   /***
    * Get errors of a specific field or the whole form
    * @param input
    * @returns {Array|*}
    */
-  self.getErrors = function (input) {
+  function getErrors(input) {
     if (!input) {
       let erroneousFields = [];
-      for (let i = 0; i < self.fields.length; i++) {
-        let field = self.fields[i];
+      for (let i = 0; i < fields.length; i++) {
+        let field = fields[i];
         if (field.errors.length) {
           erroneousFields.push({ input: field.input, errors: field.errors });
         }
@@ -212,7 +204,7 @@ export default function Pristine(form, config, live) {
       return input.pristine.errors;
     }
     return input.length ? input[0].pristine.errors : input.pristine.errors;
-  };
+  }
 
   /***
    * Validates a single field, all validator functions are called and error messages are generated
@@ -274,14 +266,14 @@ export default function Pristine(form, config, live) {
    * @param priority => priority of the validator function, higher valued function gets called first.
    * @param halt => whether validation should stop for this field after current validation function
    */
-  self.addValidator = function (elem, fn, msg, priority, halt) {
+  function addValidator(elem, fn, msg, priority, halt) {
     if (elem instanceof HTMLElement) {
       elem.pristine.validators.push({ fn, msg, priority, halt });
       elem.pristine.validators.sort((a, b) => b.priority - a.priority);
     } else {
       console.warn("The parameter elem must be a dom element");
     }
-  };
+  }
 
   /***
    * An utility function that returns a 2-element array, first one is the element where error/success class is
@@ -294,22 +286,22 @@ export default function Pristine(form, config, live) {
     if (field.errorElements) {
       return field.errorElements;
     }
-    let errorClassElement = findAncestor(field.input, self.config.classTo);
+    let errorClassElement = findAncestor(field.input, options.classTo);
     let errorTextParent = null,
       errorTextElement = null;
-    if (self.config.classTo === self.config.errorTextParent) {
+    if (options.classTo === options.errorTextParent) {
       errorTextParent = errorClassElement;
     } else {
       errorTextParent = errorClassElement.querySelector(
-        "." + self.config.errorTextParent
+        "." + options.errorTextParent
       );
     }
     if (errorTextParent) {
       errorTextElement = errorTextParent.querySelector("." + PRISTINE_ERROR);
       if (!errorTextElement) {
-        errorTextElement = document.createElement(self.config.errorTextTag);
+        errorTextElement = document.createElement(options.errorTextTag);
         errorTextElement.className =
-          PRISTINE_ERROR + " " + self.config.errorTextClass;
+          PRISTINE_ERROR + " " + options.errorTextClass;
         errorTextParent.appendChild(errorTextElement);
         errorTextElement.pristineDisplay = errorTextElement.style.display;
       }
@@ -323,8 +315,8 @@ export default function Pristine(form, config, live) {
       errorTextElement = errorElements[1];
 
     if (errorClassElement) {
-      errorClassElement.classList.remove(self.config.successClass);
-      errorClassElement.classList.add(self.config.errorClass);
+      errorClassElement.classList.remove(options.successClass);
+      errorClassElement.classList.add(options.errorClass);
     }
     if (errorTextElement) {
       errorTextElement.innerHTML = field.errors.join("<br/>");
@@ -337,11 +329,11 @@ export default function Pristine(form, config, live) {
    * @param input
    * @param error
    */
-  self.addError = function (input, error) {
+  function addError(input, error) {
     input = input.length ? input[0] : input;
     input.pristine.errors.push(error);
     _showError(input.pristine);
-  };
+  }
 
   function _removeError(field) {
     let errorElements = _getErrorElements(field);
@@ -349,8 +341,8 @@ export default function Pristine(form, config, live) {
       errorTextElement = errorElements[1];
     if (errorClassElement) {
       // IE > 9 doesn't support multiple class removal
-      errorClassElement.classList.remove(self.config.errorClass);
-      errorClassElement.classList.remove(self.config.successClass);
+      errorClassElement.classList.remove(options.errorClass);
+      errorClassElement.classList.remove(options.successClass);
     }
     if (errorTextElement) {
       errorTextElement.innerHTML = "";
@@ -361,47 +353,57 @@ export default function Pristine(form, config, live) {
 
   function _showSuccess(field) {
     let errorClassElement = _removeError(field)[0];
-    errorClassElement &&
-      errorClassElement.classList.add(self.config.successClass);
+    errorClassElement && errorClassElement.classList.add(options.successClass);
   }
 
   /***
    * Resets the errors
    */
-  self.reset = function () {
-    for (let i = 0; self.fields[i]; i++) {
-      self.fields[i].errorElements = null;
+  function reset() {
+    for (let i = 0; fields[i]; i++) {
+      fields[i].errorElements = null;
     }
-    Array.from(self.form.querySelectorAll("." + PRISTINE_ERROR)).map(function (
+    Array.from(form.querySelectorAll("." + PRISTINE_ERROR)).map(function (
       elem
     ) {
       elem.parentNode.removeChild(elem);
     });
-    Array.from(self.form.querySelectorAll("." + self.config.classTo)).map(
-      function (elem) {
-        elem.classList.remove(self.config.successClass);
-        elem.classList.remove(self.config.errorClass);
-      }
-    );
-  };
+    Array.from(form.querySelectorAll("." + options.classTo)).map(function (
+      elem
+    ) {
+      elem.classList.remove(options.successClass);
+      elem.classList.remove(options.errorClass);
+    });
+  }
 
   /***
    * Resets the errors and deletes all pristine fields
    */
-  self.destroy = function () {
-    self.reset();
-    self.fields.forEach(function (field) {
+  function destroy() {
+    reset();
+    fields.forEach(function (field) {
       delete field.input.pristine;
     });
-    self.fields = [];
-  };
+    fields = [];
+  }
 
-  self.setGlobalConfig = function (config) {
+  function setGlobalConfig(config) {
     defaultConfig = config;
-  };
+  }
 
-  return self;
-  return {};
+  return {
+    addError,
+    addValidator,
+    destroy,
+    fields,
+    form,
+    getErrors,
+    live,
+    options,
+    reset,
+    setGlobalConfig,
+    validate,
+  };
 }
 
 /***
