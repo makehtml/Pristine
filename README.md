@@ -9,31 +9,33 @@ Some examples of use can be found [here](http://pristine.js.org/demo.html).
 
 ## Usage
 
-Include the javascript file in your html head or just before the closing body tag
+### Include the javascript file in your html head or just before the closing body tag
 
 ```html
-<script src="dist/pristine.js"  type="text/javascript"></script>
+<script src="dist/pristine.js"></script>
 ```
 
-Now create some form and validate
+### Or if you use es6 modules
 
 ```javascript
-window.onload = function () {
+import Pristine from 'src/pristine.js';
+```
 
-    var form = document.getElementById("form1");
+### Now create some form and validate
 
-    // create the pristine instance
-    var pristine = new Pristine(form);
+```javascript
 
-    form.addEventListener('submit', function (e) {
-       e.preventDefault();
+const form = document.getElementById("form1");
 
-       // check if the form is valid
-       var valid = pristine.validate(); // returns true or false
+// create the pristine instance
+const pristine = new Pristine(form);
 
-    });
-};
+form.addEventListener('submit', (e) => {
+   e.preventDefault();
 
+   // check if the form is valid
+   const isValid = pristine.validate(); // returns true or false
+});
 ```
 
 **That's it**
@@ -51,7 +53,7 @@ It automatically validates `required, min, max, minlength, maxlength` attributes
 <a id="defaultConfig"></a>
 
 ```javascript
-let defaultConfig = {
+const defaultConfig = {
     // class of the parent element where the error/success class is added
     classTo: 'form-group',
     errorClass: 'has-danger',
