@@ -2,7 +2,7 @@
     typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
     typeof define === 'function' && define.amd ? define(factory) :
     (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.Pristine = factory());
-})(this, (function () { 'use strict';
+}(this, (function () { 'use strict';
 
     var lang = {
         en: {
@@ -143,7 +143,7 @@
               var name = attr.name.substr(14);
               var messageMatch = name.match(MESSAGE_REGEX);
               if (messageMatch !== null) {
-                var locale = messageMatch[1] === undefined ? 'en' : messageMatch[1];
+                var locale = messageMatch[1] === undefined ? currentLocale : messageMatch[1];
                 if (!messages.hasOwnProperty(locale)) messages[locale] = {};
                 messages[locale][name.slice(0, name.length - messageMatch[0].length)] = attr.value;
                 return;
@@ -457,4 +457,4 @@
 
     return Pristine;
 
-}));
+})));
