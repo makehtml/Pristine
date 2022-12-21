@@ -107,7 +107,7 @@ export default function Pristine(form, config, live) {
             let messageMatch = name.match(MESSAGE_REGEX);
             if (messageMatch !== null) {
               let locale =
-                messageMatch[1] === undefined ? 'en' : messageMatch[1];
+                messageMatch[1] === undefined ? currentLocale : messageMatch[1];
               if (!messages.hasOwnProperty(locale)) messages[locale] = {};
               messages[locale][
                 name.slice(0, name.length - messageMatch[0].length)
